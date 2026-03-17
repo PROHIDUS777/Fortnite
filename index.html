@@ -1,0 +1,370 @@
+<!DOCTYPE html><html lang="es"><head>
+    <meta charset="UTF-8">
+    <title>Fortnite Web - Edición Final con Minimapa Direccional</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Arial Black', sans-serif; }
+        #ui { position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        #damage-flash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 0, 0, 0); pointer-events: none; z-index: 20; transition: background 0.1s; }
+        #storm-flash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(150, 0, 255, 0); pointer-events: none; z-index: 21; transition: background 0.2s; }
+        #bush-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 255, 0, 0); pointer-events: none; z-index: 15; transition: background 0.3s; display: flex; align-items: center; justify-content: center; }
+        #stealth-text { color: #00ff00; font-size: 40px; text-shadow: 2px 2px #000; opacity: 0; }
+        
+        #minimap-container { position: absolute; top: 20px; right: 20px; width: 160px; height: 160px; border: 3px solid #fff; border-radius: 50%; background: rgba(0,0,0,0.5); overflow: hidden; }
+        #map-stats { position: absolute; top: 185px; right: 25px; color: white; font-size: 14px; text-align: right; text-shadow: 1px 1px #000; }
+
+        #hud-bottom { position: absolute; bottom: 30px; left: 50%; transform: translateX(-110%); }
+        .bar { width: 200px; height: 16px; background: rgba(0,0,0,0.6); border: 2px solid #fff; border-radius: 4px; margin-top: 5px; overflow: hidden; }
+        #stamina-bar { width: 100%; height: 6px; background: #fff; margin-bottom: 5px; }
+        #hp-bar { width: 100%; height: 100%; background: #2ecc71; transition: width 0.3s; }
+        #sh-bar { width: 100%; height: 100%; background: #3498db; transition: width 0.3s; }
+        
+        #inventory { position: absolute; bottom: 25px; left: 50%; transform: translateX(5%); display: flex; gap: 8px; }
+        .slot { width: 55px; height: 55px; background: rgba(0,0,0,0.5); border: 2px solid #555; border-radius: 8px; color: white; font-size: 8px; text-align: center; display: flex; align-items: center; justify-content: center; flex-direction: column; position: relative; }
+        .slot img { width: 25px; height: 25px; object-fit: contain; margin-bottom: 2px; }
+        .active-slot { border-color: #fff; background: rgba(255,255,255,0.2); }
+        
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); }
+        #scope-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: 200px solid black; border-radius: 50%; box-sizing: border-box; display: none; pointer-events: none; z-index: 5; }
+        
+        .screen { position: fixed; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; pointer-events: auto; text-align: center; }
+        #overlay { display: flex; background: radial-gradient(circle, #2b5ab3, #000); cursor: pointer; }
+        #overlay h1 { font-size: 70px; margin: 0; color: #f1c40f; text-shadow: 4px 4px #c0392b, 8px 8px #000; letter-spacing: -2px; transform: skew(-5deg); }
+        .instructions { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; margin-top: 15px; font-family: sans-serif; max-width: 600px; border: 1px solid rgba(255,255,255,0.2); }
+        .warning-text { color: #ff4444; font-weight: bold; margin-top: 10px; text-transform: uppercase; }
+        .btn { margin-top: 20px; padding: 15px 40px; background: #f1c40f; color: black; border: none; cursor: pointer; font-weight: bold; font-size: 18px; border-radius: 5px; }
+    </style></head><body oncontextmenu="return false;"><div id="damage-flash"></div><div id="storm-flash"></div><div id="bush-overlay"><div id="stealth-text">ESTÁS A SALVO</div></div><div id="scope-overlay"></div><div id="overlay" class="screen" onclick="start()">
+    <h1>FORTNITE WEB</h1>
+    <div class="instructions">
+        <p style="font-size: 1.2em; color: #3498db;"><b>EDICIÓN BAJO RENDIMIENTO</b></p>
+        <p>Optimizado para los portátiles de <b>educaAnd</b>.</p>
+        <p><b>CONTROLES:</b> W,A,S,D | Shift: Sprint | Espacio: Salto</p>
+        <p><b>COMBATE:</b> 1: Escopeta | 2: Sniper | Click Izq: Disparar | Click Der: Mirilla</p>
+        <p><b>CONSTRUIR:</b> Q: Pared | F: Rampa (Sólidas, 4 tiros)</p>
+        <p class="warning-text">¡QUE NO TE PILLEN EN CLASE!</p>
+    </div>
+    <p style="margin-top: 25px;">CLICK PARA ENTRAR AL MAPA</p></div><div id="pause-screen" class="screen">
+    <h1>PAUSA</h1><button class="btn" onclick="start()">REANUDAR</button></div><div id="death-screen" class="screen">
+    <h1 style="color: #ff4444;">HAS MUERTO</h1><button class="btn" onclick="location.reload()">REINTENTAR</button></div><div id="win-screen" class="screen">
+    <h1 style="color: #f1c40f;">¡VICTORIA MAGISTRAL!</h1><button class="btn" onclick="location.reload()">VOLVER A JUGAR</button></div><div id="ui">
+    <div id="minimap-container"><canvas id="minimap-canvas" width="160" height="160"></canvas></div>
+    <div id="map-stats">KILLS: <span id="kills-count">0</span><br>VIVOS: <span id="alive-count">31</span></div>
+    <div id="crosshair"></div>
+    <div id="hud-bottom">
+        <div id="stamina-bar"></div>
+        <div class="bar"><div id="sh-bar"></div></div>
+        <div class="bar"><div id="hp-bar"></div></div>
+    </div>
+    <div id="inventory">
+        <div id="slot-1" class="slot active-slot">1<br>SHOTGUN</div>
+        <div id="slot-2" class="slot">2<br>SNIPER</div>
+        <div id="slot-3" class="slot"><img src="https://img.freepik.com/vector-gratis/bolsa-medica-roja_1308-6903.jpg" alt="med">3<br>(<span id="count-med">0</span>)</div>
+        <div id="slot-4" class="slot"><img src="https://i.pinimg.com/originals/93/0d/83/930d831f182e3c229746fb2de5f2c4ca.png" alt="shield">4<br>(<span id="count-shi">0</span>)</div>
+    </div></div>
+<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
+<script type="module">
+    import * as THREE from 'three';
+    import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+    let scene, camera, renderer, controls, gunGroup, stormMesh;
+    let hp = 100, shield = 100, stamina = 100, kills = 0, stormRadius = 450;
+    let inv = { med: 0, shi: 0 };
+    let velocity = new THREE.Vector3(), canJump = true, isAiming = false, isHidden = false;
+    let currentSlot = 1, move = { f: false, b: false, l: false, r: false, shift: false };
+    const enemies = [], bushes = [], collidables = [], items = [], constructions = [];
+    const mCanvas = document.getElementById('minimap-canvas'), mCtx = mCanvas.getContext('2d');
+
+    let buildPreview = null, buildMode = null;
+    const getH = (x, z) => Math.sin(x * 0.1) * 2 + Math.cos(z * 0.1) * 2;
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 150, 600);
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        controls = new PointerLockControls(camera, document.body);
+
+        controls.addEventListener('lock', () => { document.querySelectorAll('.screen').forEach(s=>s.style.display='none'); });
+        controls.addEventListener('unlock', () => { if(hp > 0 && enemies.length > 0) document.getElementById('pause-screen').style.display = 'flex'; });
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(100, 200, 100);
+        scene.add(sun);
+
+        const groundGeo = new THREE.PlaneGeometry(1000, 1000, 100, 100);
+        groundGeo.rotateX(-Math.PI/2);
+        const posArr = groundGeo.attributes.position.array;
+        for (let i = 0; i < posArr.length; i += 3) posArr[i+1] = getH(posArr[i], posArr[i+2]);
+        groundGeo.computeVertexNormals();
+        scene.add(new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ color: 0x4caf50 })));
+
+        stormMesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 800, 64, 1, true), new THREE.MeshBasicMaterial({ color: 0x9600ff, side: THREE.DoubleSide, transparent: true, opacity: 0.3 }));
+        scene.add(stormMesh);
+
+        for(let i=0; i<15; i++) createHouse(Math.random()*800-400, Math.random()*800-400);
+        for(let i=0; i<80; i++) createTree(Math.random()*900-450, Math.random()*900-450);
+        for(let i=0; i<100; i++) createBush(Math.random()*800-400, Math.random()*800-400);
+        for(let i=0; i<30; i++) spawnEnemy();
+        for(let i=0; i<80; i++) spawnItem(Math.random()*800-400, Math.random()*800-400, Math.random() > 0.5 ? 'med' : 'shi');
+
+        gunGroup = new THREE.Group();
+        updateGunModel();
+        camera.add(gunGroup);
+        scene.add(camera);
+        setupControls();
+        setInterval(() => { if(stormRadius > 20) stormRadius -= 15; }, 15000);
+    }
+
+    function createHouse(x, z) {
+        const h = new THREE.Group();
+        const wallMat = new THREE.MeshStandardMaterial({color: 0xdddddd});
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(12, 0.2, 12), new THREE.MeshStandardMaterial({color: 0x5a3a22}));
+        h.add(floor); collidables.push(floor);
+        const p1L = new THREE.Mesh(new THREE.BoxGeometry(4.5, 7, 0.5), wallMat); p1L.position.set(-3.75, 3.5, 6);
+        const p1R = new THREE.Mesh(new THREE.BoxGeometry(4.5, 7, 0.5), wallMat); p1R.position.set(3.75, 3.5, 6);
+        const p1T = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 0.5), wallMat); p1T.position.set(0, 5.5, 6);
+        h.add(p1L, p1R, p1T); collidables.push(p1L, p1R, p1T);
+        const p2 = new THREE.Mesh(new THREE.BoxGeometry(12, 7, 0.5), wallMat); p2.position.set(0, 3.5, -6);
+        h.add(p2); collidables.push(p2);
+        const p3 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7, 12), wallMat); p3.position.set(6, 3.5, 0);
+        const p4 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7, 12), wallMat); p4.position.set(-6, 3.5, 0);
+        h.add(p3, p4); collidables.push(p3, p4);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(10, 5, 4), new THREE.MeshStandardMaterial({color: 0x8b0000}));
+        roof.position.y = 9.5; roof.rotation.y = Math.PI/4;
+        h.add(roof); h.position.set(x, getH(x,z), z); scene.add(h);
+    }
+
+    function spawnItem(x, z, type) {
+        const geo = type === 'med' ? new THREE.BoxGeometry(0.6, 0.6, 0.6) : new THREE.CylinderGeometry(0.4, 0.4, 0.8);
+        const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: type === 'med' ? 0xffffff : 0x00aaff, emissive: type === 'med' ? 0xff0000 : 0x0000ff }));
+        mesh.position.set(x, getH(x, z) + 0.5, z);
+        mesh.userData = { type };
+        scene.add(mesh); items.push(mesh);
+    }
+
+    function updateGunModel() {
+        gunGroup.clear();
+        if(currentSlot > 2) { gunGroup.visible = false; return; }
+        gunGroup.visible = true;
+        const matSteel = new THREE.MeshStandardMaterial({color: 0x333333, metalness: 0.8});
+        const matWood = new THREE.MeshStandardMaterial({color: 0x4b2d0e});
+        if (currentSlot === 1) { 
+            const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.8), matSteel);
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.4), matWood);
+            body.position.z = 0.2;
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.25, 0.1), matSteel);
+            handle.position.set(0, -0.15, 0.3); handle.rotation.x = -0.3;
+            gunGroup.add(barrel, body, handle);
+        } else { 
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.2), matSteel); barrel.rotation.x = Math.PI/2;
+            const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3), matSteel); scope.position.y = 0.08; scope.rotation.x = Math.PI/2;
+            const stock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.4), matWood); stock.position.z = 0.5;
+            gunGroup.add(barrel, scope, stock);
+        }
+        gunGroup.position.set(0.4, -0.4, -0.8);
+    }
+
+    function shootTracer(from, to, color = 0xffff00) {
+        const points = [from, to];
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.8 }));
+        scene.add(line);
+        setTimeout(() => scene.remove(line), 60);
+    }
+
+    function setupControls() {
+        document.addEventListener('keydown', (e) => {
+            if(e.code === 'KeyW') move.f = true; if(e.code === 'KeyS') move.b = true;
+            if(e.code === 'KeyA') move.l = true; if(e.code === 'KeyD') move.r = true;
+            if(e.code === 'ShiftLeft') move.shift = true;
+            if(e.code === 'KeyQ') setPreview('wall');
+            if(e.code === 'KeyF') setPreview('ramp');
+            if(e.code.startsWith('Digit')) {
+                let s = parseInt(e.code.replace('Digit',''));
+                if(s >= 1 && s <= 4) {
+                    currentSlot = s; updateGunModel();
+                    if(buildPreview) { scene.remove(buildPreview); buildPreview = null; buildMode = null; }
+                    document.querySelectorAll('.slot').forEach(el=>el.classList.remove('active-slot'));
+                    document.getElementById('slot-'+s).classList.add('active-slot');
+                }
+            }
+            if(e.code === 'Space' && canJump) { velocity.y = 0.25; canJump = false; }
+        });
+        document.addEventListener('keyup', (e) => {
+            if(e.code === 'KeyW') move.f = false; if(e.code === 'KeyS') move.b = false;
+            if(e.code === 'KeyA') move.l = false; if(e.code === 'KeyD') move.r = false;
+            if(e.code === 'ShiftLeft') move.shift = false;
+        });
+        document.addEventListener('mousedown', (e) => {
+            if(!controls.isLocked) return;
+            if(e.button === 0) {
+                if(buildPreview) { placeConstruction(buildPreview.position.clone(), buildPreview.rotation.clone(), buildMode); } 
+                else if(currentSlot <= 2) {
+                    const ray = new THREE.Raycaster(); ray.setFromCamera({x:0,y:0}, camera);
+                    const hits = ray.intersectObjects([...enemies, ...constructions], true);
+                    const end = hits.length > 0 ? hits[0].point : camera.position.clone().add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(100));
+                    shootTracer(camera.position.clone().sub(new THREE.Vector3(0,0.3,0)), end);
+                    if(hits.length > 0) {
+                        let obj = hits[0].object;
+                        if(obj.userData.isConstruction) { 
+                            obj.userData.health--; 
+                            if(obj.userData.health <= 0) { scene.remove(obj); collidables.splice(collidables.indexOf(obj),1); constructions.splice(constructions.indexOf(obj),1); } 
+                        }
+                        else {
+                            let en = obj.parent;
+                            if(en && en.userData.hp !== undefined) {
+                                en.userData.hp -= (currentSlot === 2 ? 100 : 45);
+                                en.userData.hpBar.scale.x = Math.max(0, en.userData.hp / 200);
+                                if(en.userData.hp <= 0) { scene.remove(en); enemies.splice(enemies.indexOf(en),1); kills++; }
+                            }
+                        }
+                    }
+                } else {
+                    if(currentSlot === 3 && inv.med > 0) { hp = Math.min(100, hp + 50); inv.med--; }
+                    if(currentSlot === 4 && inv.shi > 0) { shield = Math.min(100, shield + 50); inv.shi--; }
+                    updateInvUI();
+                }
+            }
+            if(e.button === 2) isAiming = true;
+        });
+        document.addEventListener('mouseup', () => isAiming = false);
+    }
+
+    function setPreview(type) {
+        if(buildPreview) scene.remove(buildPreview);
+        buildMode = type;
+        const geo = type === 'wall' ? new THREE.BoxGeometry(4, 4, 0.2) : new THREE.BoxGeometry(4, 0.2, 5);
+        buildPreview = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x0088ff, transparent: true, opacity: 0.5 }));
+        scene.add(buildPreview);
+    }
+
+    function placeConstruction(pos, rot, type) {
+        const geo = type === 'wall' ? new THREE.BoxGeometry(4, 4, 0.2) : new THREE.BoxGeometry(4, 0.2, 5);
+        const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x8b4513 }));
+        mesh.position.copy(pos); mesh.rotation.copy(rot);
+        mesh.userData = { health: 4, isConstruction: true }; 
+        scene.add(mesh); collidables.push(mesh); constructions.push(mesh);
+        if(buildPreview) { scene.remove(buildPreview); buildPreview = null; buildMode = null; }
+    }
+
+    function updateInvUI() {
+        document.getElementById('count-med').innerText = inv.med;
+        document.getElementById('count-shi').innerText = inv.shi;
+    }
+
+    window.start = () => controls.lock();
+
+    function createTree(x, z) {
+        const t = new THREE.Group();
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 6), new THREE.MeshStandardMaterial({color: 0x4b2d0e}));
+        const leaves = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 8), new THREE.MeshStandardMaterial({color: 0x0d5a0d}));
+        leaves.position.y = 5; t.add(trunk, leaves);
+        t.position.set(x, getH(x,z), z); scene.add(t); collidables.push(trunk);
+    }
+
+    function createBush(x, z) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), new THREE.MeshStandardMaterial({color: 0x0a3a0a}));
+        b.position.set(x, getH(x,z)+0.5, z); scene.add(b); bushes.push(b);
+    }
+
+    function spawnEnemy() {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1, 4, 4), new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.8, 0.5) }));
+        body.position.y = 1; g.add(body);
+        const hpB = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.1), new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
+        hpB.position.y = 2.5; g.add(hpB);
+        g.userData = { hp: 200, lastShot: 0, vY: 0, hpBar: hpB, targetPos: new THREE.Vector3(Math.random()*800-400, 0, Math.random()*800-400), lastBuild: 0 };
+        g.position.set(Math.random()*800-400, 15, Math.random()*800-400);
+        scene.add(g); enemies.push(g);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        if(controls.isLocked) {
+            let oldPos = camera.position.clone();
+            let speed = (move.shift && stamina > 0) ? 0.3 : 0.15;
+            if(move.shift && (move.f||move.b)) stamina -= 0.4; else if(stamina < 100) stamina += 0.2;
+            document.getElementById('stamina-bar').style.width = stamina + "%";
+            if(move.f) controls.moveForward(speed); if(move.b) controls.moveForward(-speed);
+            if(move.l) controls.moveRight(-speed); if(move.r) controls.moveRight(speed);
+
+            collidables.forEach(obj => { if(camera.position.distanceTo(obj.position) < 2.5) camera.position.copy(oldPos); });
+
+            velocity.y -= 0.01; camera.position.y += velocity.y;
+            let ground = getH(camera.position.x, camera.position.z) + 2.2;
+            if(camera.position.y < ground) { camera.position.y = ground; velocity.y = 0; canJump = true; }
+
+            if(buildPreview) {
+                const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+                const pos = camera.position.clone().add(dir.multiplyScalar(5));
+                buildPreview.position.set(pos.x, getH(pos.x, pos.z) + 2, pos.z);
+                if(buildMode === 'ramp') buildPreview.rotation.x = -Math.PI/4;
+                else buildPreview.lookAt(camera.position.x, buildPreview.position.y, camera.position.z);
+            }
+
+            items.forEach((it, i) => { if(camera.position.distanceTo(it.position) < 2.5) { if(it.userData.type === 'med') inv.med++; else inv.shi++; updateInvUI(); scene.remove(it); items.splice(i, 1); } });
+
+            stormMesh.scale.set(stormRadius, 1, stormRadius);
+            if(new THREE.Vector2(camera.position.x, camera.position.z).length() > stormRadius) hp -= 0.1;
+
+            isHidden = false;
+            bushes.forEach(b => { if(camera.position.distanceTo(b.position) < 2.5) isHidden = true; });
+            document.getElementById('stealth-text').style.opacity = isHidden ? "1" : "0";
+
+            camera.fov += ((isAiming && currentSlot===2 ? 15 : 75) - camera.fov) * 0.1; camera.updateProjectionMatrix();
+            document.getElementById('scope-overlay').style.display = (isAiming && currentSlot===2) ? 'block' : 'none';
+
+            document.getElementById('hp-bar').style.width = hp + "%";
+            document.getElementById('sh-bar').style.width = shield + "%";
+            document.getElementById('alive-count').innerText = enemies.length + 1;
+
+            enemies.forEach(en => {
+                let targets = [];
+                if(!isHidden && en.position.distanceTo(camera.position) < 60) targets.push({pos: camera.position, type:'p'});
+                enemies.forEach(other => { if(other!==en && en.position.distanceTo(other.position)<50) targets.push({pos: other.position, type:'b', ref: other}); });
+                let target = targets.sort((a,b)=>en.position.distanceTo(a.pos)-en.position.distanceTo(b.pos))[0];
+
+                if(target) {
+                    en.lookAt(target.pos.x, en.position.y, target.pos.z);
+                    let d = en.position.distanceTo(target.pos);
+                    if(d > 12) en.translateZ(0.12);
+                    if(Date.now()-en.userData.lastShot > 2000+Math.random()*1000) {
+                        en.userData.lastShot = Date.now();
+                        let err = d*0.04;
+                        let aim = target.pos.clone().add(new THREE.Vector3((Math.random()-0.5)*err, (Math.random()-0.5)*err, (Math.random()-0.5)*err));
+                        shootTracer(en.position.clone().add(new THREE.Vector3(0,1.5,0)), aim, 0xff3333);
+                        if(Math.random() < 0.05 && Date.now() - en.userData.lastBuild > 15000) {
+                            placeConstruction(en.position.clone().add(en.getWorldDirection(new THREE.Vector3()).multiplyScalar(3)), en.rotation.clone(), 'wall');
+                            en.userData.lastBuild = Date.now();
+                        }
+                        if(Math.random() > 0.45+(d*0.005)) {
+                            if(target.type==='p') { if(shield>0) shield-=12; else hp-=10; document.getElementById('damage-flash').style.background="rgba(255,0,0,0.2)"; setTimeout(()=>document.getElementById('damage-flash').style.background="transparent",100); }
+                            else { target.ref.userData.hp-=35; target.ref.userData.hpBar.scale.x=Math.max(0, target.ref.userData.hp/200); if(target.ref.userData.hp<=0){scene.remove(target.ref); enemies.splice(enemies.indexOf(target.ref),1);} }
+                        }
+                    }
+                } else {
+                    en.lookAt(en.userData.targetPos.x, en.position.y, en.userData.targetPos.z); en.translateZ(0.07);
+                    if(en.position.distanceTo(en.userData.targetPos)<5) en.userData.targetPos.set(Math.random()*800-400,0,Math.random()*800-400);
+                }
+                en.userData.vY -= 0.01; en.position.y += en.userData.vY;
+                let f = getH(en.position.x, en.position.z); if(en.position.y < f){en.position.y=f; en.userData.vY=0;}
+                en.userData.hpBar.lookAt(camera.position);
+            });
+
+            mCtx.clearRect(0,0,160,160);
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+            const angle = Math.atan2(dir.x, dir.z);
+            mCtx.save(); mCtx.translate(80, 80); mCtx.rotate(angle);
+            mCtx.fillStyle="white"; mCtx.fillRect(-2,-2,4,4);
+            mCtx.strokeStyle="white"; mCtx.beginPath(); mCtx.moveTo(0,0); mCtx.lineTo(0,10); mCtx.stroke();
+            mCtx.restore();
+            enemies.forEach(en => { mCtx.fillStyle="red"; mCtx.beginPath(); mCtx.arc(80+(en.position.x-camera.position.x)*0.2, 80+(en.position.z-camera.position.z)*0.2, 2, 0, Math.PI*2); mCtx.fill(); });
+            if(hp <= 0) document.getElementById('death-screen').style.display='flex';
+        }
+        renderer.render(scene, camera);
+    }
+    init(); animate();
+</script></body></html>
